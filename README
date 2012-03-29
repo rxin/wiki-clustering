@@ -1,0 +1,20 @@
+
+CS294-1 Behavioral Data Mining Spring 2012
+Programming Assignment 3: Clustering via Hadoop
+
+This is actually done with Spark.
+
+You will need the spark-repl jar that is not included in this repo. To generate
+the jar, do:
+
+$ git clone git@github.com:mesos/spark.git
+$ cd spark
+$ sbt/sbt assembly
+
+Copy the spark-repl jar to lib directory.
+
+Then you can run Spark shell with 20 threads using:
+
+MASTER=local[20] ./spark-shell
+
+
