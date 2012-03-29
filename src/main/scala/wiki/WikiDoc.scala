@@ -4,28 +4,13 @@ import scala.collection.mutable.MutableList
 import scala.util.matching.Regex
 
 
-class WikiDoc (
-  val id: Int,
-  val title: String,
-  val timestamp: String,
-  val author: String,
-  val text: String,
-  val categories: Seq[String]) {
-
-  def this(doc: String) = {
-    // TODO(rxin): extract content between
-    // <text xml:space="preserve">
-    // and
-    // </text>
-    // for text.
-    this(
-      WikiDoc.extractDocId(doc),
-      WikiDoc.extractTitle(doc),
-      WikiDoc.extractTimestamp(doc),
-      WikiDoc.extractAuthor(doc),
-      doc,
-      WikiDoc.extractCategories(doc))
-  }  
+class WikiDoc (doc: String) {
+  lazy val id: Int = WikiDoc.extractDocId(doc)
+  lazy val title: String = WikiDoc.extractTitle(doc)
+  lazy val timestamp: String = WikiDoc.extractTimestamp(doc)
+  lazy val author: String = WikiDoc.extractAuthor(doc)
+  val text: String = doc
+  lazy val categories: Seq[String] = WikiDoc.extractCategories(doc)
 }
 
 
