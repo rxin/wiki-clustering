@@ -1,0 +1,12 @@
+
+
+1. The xml dump doesn't have any pages that contain multiple revisions.
+
+val revisionR = "<revision>".r
+val wikiRdd = wiki.WikiClustering.createWikiRdd(sc, "/scratch/rxin/wikipedia/xaa")
+wikiRdd.filter( doc => revisionR.findAllIn(doc).length > 1).length
+
+The above returns 0.
+
+
+
