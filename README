@@ -17,4 +17,8 @@ Then you can run Spark shell with 20 threads using:
 
 MASTER=local[20] ./spark-shell
 
+To run a pipeline in command line (without using REPL), do:
+
+./run wiki.WordCount local[20] /scratch/rxin/wikipedia/wikipedia.xml /scratch/rxin/wikipedia/wordcount
+
 

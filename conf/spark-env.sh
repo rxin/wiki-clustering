@@ -16,7 +16,7 @@ SPARK_JAVA_OPTS=" -Dspark.cache.class=spark.SerializingCache"
 SPARK_JAVA_OPTS+=" -Dspark.serializer=spark.KryoSerializer"
 SPARK_JAVA_OPTS+=" -Dspark.kryo.registrator=wiki.KryoRegistrator"
 SPARK_JAVA_OPTS+=" -Dspark.kryoserializer.buffer.mb=300"
-SPARK_JAVA_OPTS+=" -verbose:gc -XX:-PrintGCDetails -XX:+PrintGCTimeStamps"
+SPARK_JAVA_OPTS+=" -verbose:gc -XX:-PrintGCDetails -XX:+PrintGCTimeStamps -XX:+UseParallelGC"
 
 export SPARK_JAVA_OPTS
 
