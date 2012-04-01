@@ -36,62 +36,95 @@ object Pipeline {
     (new File(baseOutputPath + "/stemStop")).mkdirs()
 
     val sc = new SparkContext(args(0), "WikiClustering")
-    val wikiRdd = Pipeline.createWikiRdd(sc, inputPath)
-    runPipeline(wikiRdd, Pipeline.defaultTok, baseOutputPath + "/default")
-    runPipeline(wikiRdd, Pipeline.stemTok, baseOutputPath + "/stem")
-    runPipeline(wikiRdd, Pipeline.stopTok, baseOutputPath + "/stop")
-    runPipeline(wikiRdd, Pipeline.stemStopTok, baseOutputPath + "/stemStop")
+    val wikiRdd = Pipeline.createWikiRddFromXml(sc, inputPath)
+    generateEncodedDocs(wikiRdd, Pipeline.defaultTok, baseOutputPath + "/default")
+    convertEncodedDocs2BagOfWords(
+      sc,
+      baseOutputPath + "/default/docs-encoded",
+      baseOutputPath + "/default/docs-bagsOfWords")
+
+    generateEncodedDocs(wikiRdd, Pipeline.stemTok, baseOutputPath + "/stem")
+    convertEncodedDocs2BagOfWords(
+      sc,
+      baseOutputPath + "/stem/docs-encoded",
+      baseOutputPath + "/stem/docs-bagsOfWords")
+
+    generateEncodedDocs(wikiRdd, Pipeline.stopTok, baseOutputPath + "/stop")
+    convertEncodedDocs2BagOfWords(
+      sc,
+      baseOutputPath + "/stop/docs-encoded",
+      baseOutputPath + "/stop/docs-bagsOfWords")
+
+    generateEncodedDocs(wikiRdd, Pipeline.stemStopTok, baseOutputPath + "/stemStop")
+    convertEncodedDocs2BagOfWords(
+      sc,
+      baseOutputPath + "/stemStop/docs-encoded",
+      baseOutputPath + "/stemStop/docs-bagsOfWords")
   }
 
-  def runPipeline(wikiRdd: RDD[WikiDoc], tok: (String => TokenStream), outpath: String) {
+  def generateEncodedDocs(wikiRdd: RDD[WikiDoc], tok: (String => TokenStream), outpath: String) {
     // Do the word count and generate the dictionary.
-    val wordCounts = produceWordCounts(wikiRdd, tok, outpath + "/dict.txt")
-    val wordIndexes = wordCounts.zipWithIndex.map { case(wc, i) => (wc._1, i) }
-
-    // Build a hash map for word counts.
-    val dict = new HashMap[String, Int]() ++ wordIndexes
-
-    generateFeatureFiles(wikiRdd, dict, tok, outpath + "/doc-ints")
+    val (encodingDict, dfDict) = produceDocumentFrequencyDict(wikiRdd, tok, outpath)
+    encodeDocuments(wikiRdd, encodingDict, tok, outpath)
   }
 
-  def generateFeatureFiles(
+  def convertEncodedDocs2BagOfWords(sc: SparkContext, in: String, out: String) {
+    val docs: RDD[(IntWritable, IntArrayWritable)] = sc.sequenceFile(in)
+    val bagOfWordsDocs: RDD[(IntWritable, Seq[Int])] = docs.map { case(id, tokens) =>
+      val wordCountsMap: Map[Int, Int] = tokens.get.groupBy(x => x).mapValues(_.length)
+      (id, wordCountsMap.flatMap(x => x.productIterator).asInstanceOf[Iterable[Int]].toSeq)
+    }
+    bagOfWordsDocs.saveAsSequenceFile(out)
+  }
+
+  /**
+   * Use the supplied encoding dictionary to encode documents (replace string
+   * tokens with Ints) and save it in a sequence file. The sequence file is of
+   * type: (IntWritable, IntArrayWritable).
+   */
+  def encodeDocuments(
     wikiRdd: RDD[WikiDoc],
-    dict: Map[String, Int],
+    encodingDict: Map[String, Int],
     tok: (String => TokenStream),
     outpath: String) {
     
     // Tokenized doc.
     val tokenizedDocs: RDD[(Int, Seq[Int])] = wikiRdd.map { doc =>
-      (doc.id, tokenizeText(doc.text, tok).filter(dict.contains(_)).map(dict(_)))
+      (doc.id, tokenizeText(doc.text, tok).filter(encodingDict.contains(_)).map(encodingDict(_)))
     }
-    tokenizedDocs.saveAsSequenceFile(outpath)
+    tokenizedDocs.saveAsSequenceFile(outpath + "/docs-encoded")
   }
 
-  def produceWordCounts(wikiRdd: RDD[WikiDoc], tok: (String => TokenStream), outpath: String)
-  : Array[(String, Int)] = {
-    // Flat map all documents into tokens (words).
-    val tokens = wikiRdd flatMap { doc => tokenizeText(doc.text, tok) }
+  /**
+   * Generate the word dictionary for encoding and document frequencies. It
+   * should be small enough to store as a hash map on all nodes.
+   */
+  def produceDocumentFrequencyDict(
+    wikiRdd: RDD[WikiDoc],
+    tok: (String => TokenStream),
+    outpath: String)
+  : (Map[String, Int], Map[Int, Int]) = {
 
-    // Count the words. Filter out the most uncommon ones.
-    val counts = tokens.map((_, 1))
+    val dfSorted: Array[(String, Int)] = wikiRdd.flatMap(d => tokenizeText(d.text, tok).distinct)
+      .map((_, 1))
       .reduceByKey(_ + _)
-      .filter { case(w, c) => c > 2 }
+      .filter{case(w, c) => c > 50}
+      .collect()
+      .sortBy(_._2)
+      .reverse
 
-    // Sort the words in descending order.
-    val countsSorted = counts.map { case(w, c) => (c, w) }
-      .sortByKey(ascending=false)
-      .map { case(c, w) => (w, c) }
+    writeArrayOfPairToDisk(dfSorted, outpath + "/dict-df.txt", true)
 
-    //countsSorted.map { case(w, c) => w + "\t" + c }.saveAsTextFile(outpath)
-    val countsSortedArray = countsSorted.collect()
-    Pipeline.writeArrayOfPairToDisk(countsSortedArray, outpath, true)
-    //val out = new FileWriter(outpath)
-    //countsSortedArray.foreach { case(c, w) => out.write(w + "\t" + c + "\n") }
-    //out.close()
-
-    countsSortedArray
+    // encodingDict maps a word to its integer id.
+    val encodingDict = dfSorted.zipWithIndex.map { case(wc, i) => (wc._1, i) }.toMap
+    // dfDict maps an integer id to the document frequency of the word.
+    val dfDict = dfSorted.zipWithIndex.map { case(wc, i) => (i, wc._2) }.toMap
+    (encodingDict, dfDict)
   }
 
+  /**
+   * Given some text in string, tokenize it and return a sequence of tokens.
+   */
   def tokenizeText(text: String, tok: (String => TokenStream)): Seq[String] = {
     val tokenStream = tok(text)
     val termAtt: TermAttribute = tokenStream.addAttribute(classOf[TermAttribute])
@@ -103,7 +136,10 @@ object Pipeline {
     tokens
   }
 
-  def createWikiRdd(sc: SparkContext, path: String): RDD[WikiDoc] = {
+  /**
+   * Create RDD from the Wikipedia XML dump.
+   */
+  def createWikiRddFromXml(sc: SparkContext, path: String): RDD[WikiDoc] = {
     val conf = new JobConf
     conf.set("xmlinput.start", "<page>")
     conf.set("xmlinput.end", "</page>")
