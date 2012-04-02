@@ -15,10 +15,9 @@ Copy the spark-repl jar to lib directory.
 
 Then you can run Spark shell with 20 threads using:
 
-MASTER=local[20] ./spark-shell
+$ MASTER=local[20] ./spark-shell
 
-To run a pipeline in command line (without using REPL), do:
-
-./run wiki.WordCount local[20] /scratch/rxin/wikipedia/wikipedia.xml /scratch/rxin/wikipedia/wordcount
-
+To run clustering in command line (without using REPL), do:
+$ sbt/sbt compile
+$ ./run wiki.Clustering /scratch/rxin/wikipedia/features/default/docs-bagOfWords/
 

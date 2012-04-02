@@ -22,6 +22,12 @@ object Clustering {
     println(features.size)
   }
 
+  /**
+   * Build the bag-of-words feature matrix from input files in the form of an
+   * immutable Map. For each entry, the map key is the integer id, and map value
+   * is an Int2IntMap that maps the index of each token to the number of times
+   * the token appears in the corresponding document.
+   */
   def buildFeatureMatrix(inputPath: String): Map[Int, Int2IntMap] = {
     val conf = new JobConf
     val path = new Path(inputPath)
