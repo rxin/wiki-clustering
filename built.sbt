@@ -8,7 +8,8 @@ organization := "edu.berkeley.cs.amplab"
 scalaVersion := "2.9.1"
 
 libraryDependencies ++= Seq(
-  "org.apache.lucene" % "lucene-analyzers" % "3.5.0" % "compile->default"
+  "org.apache.lucene" % "lucene-analyzers" % "3.5.0" % "compile->default",
+  "it.unimi.dsi" % "fastutil" % "6.4.3"
 )
 
 resolvers ++= Seq(
